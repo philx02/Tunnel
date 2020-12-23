@@ -19,6 +19,7 @@ def setup_custom_logger(name):
 LOGGER = setup_custom_logger("proxy")
 
 ACCEPTED_NETWORK = ipaddress.IPv4Network("142.39.0.0/16")
+#ACCEPTED_NETWORK = ipaddress.IPv4Network("192.168.2.0/24")
 
 class ProxyClientProtocol(asyncio.Protocol):
     def __init__(self, transport):
@@ -51,10 +52,11 @@ class ProxyServerProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         LOGGER.info("Connection with " + str(self.peer) + " closed")
-        self.proxy.shutdown(socket.SHUT_RDWR)
-        self.proxy.close()
-        self.coro.close()
-        self.loop.stop()
+        if self.step != 0:
+            self.proxy.shutdown(socket.SHUT_RDWR)
+            self.proxy.close()
+            self.coro.close()
+            self.loop.stop()
 
     def data_received(self, data):
         if self.step == 0:

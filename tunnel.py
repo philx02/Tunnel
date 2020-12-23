@@ -23,6 +23,9 @@ ACCEPTED_NETWORK = ipaddress.IPv4Network("142.39.0.0/16")
 class ProxyClientProtocol(asyncio.Protocol):
     def __init__(self, transport):
         self.transport = transport
+    
+    def __del__(self):
+        print('Destructor ProxyClientProtocol')
 
     def data_received(self, data):
         try:
@@ -33,6 +36,9 @@ class ProxyClientProtocol(asyncio.Protocol):
 class ProxyServerProtocol(asyncio.Protocol):
     def __init__(self, loop):
         self.loop = loop
+    
+    def __del__(self):
+        print('Destructor ProxyServerProtocol')
 
     def connection_made(self, transport):
         self.step = 0
@@ -42,12 +48,13 @@ class ProxyServerProtocol(asyncio.Protocol):
         if self.peer not in ACCEPTED_NETWORK:
             LOGGER.info("Peer is not in accepted networks")
             self.transport.close()
-    
+
     def connection_lost(self, exc):
         LOGGER.info("Connection with " + str(self.peer) + " closed")
-        #self.proxy.shutdown(socket.SHUT_RDWR)
-        #self.proxy.close()
-        #self.coro.close()
+        self.proxy.shutdown(socket.SHUT_RDWR)
+        self.proxy.close()
+        self.coro.close()
+        self.loop.stop()
 
     def data_received(self, data):
         if self.step == 0:
@@ -79,20 +86,29 @@ class ProxyServerProtocol(asyncio.Protocol):
             except:
                 self.transport.close()
 
-loop = asyncio.get_event_loop()
 
-coro = loop.create_server(lambda: ProxyServerProtocol(loop), "0.0.0.0", 5005)
+def run_server():
+    exit_program = 0
+    
+    loop = asyncio.new_event_loop()
 
-server = loop.run_until_complete(coro)
+    coro = loop.create_server(lambda: ProxyServerProtocol(loop), "0.0.0.0", 5005)
 
-print('Serving on {}'.format(server.sockets[0].getsockname()))
-try:
-    loop.run_forever()
-except KeyboardInterrupt:
-    pass
+    server = loop.run_until_complete(coro)
 
-# Close the server
-server.close()
-loop.run_until_complete(server.wait_closed())
-loop.close()
+    print('Serving on {}'.format(server.sockets[0].getsockname()))
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        exit_program = 1
+    except ClientDisconnect:
+        exit_program = 0
 
+    # Close the server
+    server.close()
+    loop.run_until_complete(server.wait_closed())
+    loop.close()
+
+    return exit_program
+
+sys.exit(run_server())
